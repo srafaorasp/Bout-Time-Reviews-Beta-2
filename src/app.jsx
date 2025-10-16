@@ -1,7 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import '../css/style.css';
-import '../css/components.css';
-import '../css/animations.css';
+// CSS imports are now handled in main.jsx, so they are removed from here.
 
 // --- Helper function to create a default fighter state ---
 const createNewFighter = () => ({
@@ -164,4 +162,5 @@ function App() {
 }
 
 export default App;
+
 
