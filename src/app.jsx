@@ -1,5 +1,6 @@
 import React, { useState, useEffect } from 'react';
-// CSS imports are now handled in main.jsx, so they are removed from here.
+import { fetchSteamData } from './api.js';
+import { calculateRawScore, applyBonuses } from './fightLogic.js';
 
 // --- Helper function to create a default fighter state ---
 const createNewFighter = () => ({
@@ -25,11 +26,33 @@ const Header = () => (
     </div>
 );
 
-const FighterCard = ({ fighter, prefix }) => {
-    // This is a controlled component, but for now, we'll just display data.
-    // In Phase 3, we'll add onChange handlers and state updates.
+const FighterCard = ({ fighter, prefix, handleFetch, setFighter, universeFighters }) => {
+    const [steamIdInput, setSteamIdInput] = useState('');
+    const [isLoading, setIsLoading] = useState(false);
+
+    // Update the input field if the fighter data changes from above
+    useEffect(() => {
+        setSteamIdInput(fighter?.appId || '');
+    }, [fighter]);
+
+    const onFetchClick = async () => {
+        setIsLoading(true);
+        await handleFetch(prefix, steamIdInput);
+        setIsLoading(false);
+    };
+
+    const handleSelectChange = (e) => {
+        const selectedId = e.target.value;
+        const selectedFighter = universeFighters.find(f => f.appId === selectedId);
+        if (selectedFighter) {
+            setFighter(selectedFighter);
+        } else {
+            setFighter(createNewFighter());
+        }
+    };
+
     if (!fighter) {
-        return <div className="bg-gray-800 rounded-2xl shadow-2xl p-6 space-y-2 flex flex-col animate-pulse"></div>;
+        return <div className="bg-gray-800 rounded-2xl shadow-2xl p-6 space-y-2 flex flex-col animate-pulse min-h-[600px]"></div>;
     }
 
     const fighterName = fighter.name || (prefix === 'item1' ? 'Fighter 1' : 'Fighter 2');
@@ -50,13 +73,16 @@ const FighterCard = ({ fighter, prefix }) => {
 
             <div className="bg-gray-700/50 p-4 rounded-xl space-y-2 mt-2">
                 <h3 className="text-lg font-semibold text-white text-center">Load Fighter</h3>
-                 <select id={`${prefix}-universe-select`} className="form-select w-full bg-gray-900 border-gray-600 rounded-md py-2 px-3 text-white">
+                 <select id={`${prefix}-universe-select`} value={fighter.appId || ''} onChange={handleSelectChange} className="form-select w-full bg-gray-900 border-gray-600 rounded-md py-2 px-3 text-white">
                     <option value="">Select from Universe</option>
+                    {universeFighters.map(f => <option key={f.appId} value={f.appId}>{f.name}</option>)}
                 </select>
                 <p className="text-center text-xs text-gray-400">- OR -</p>
                 <div className="flex gap-2 items-center">
-                    <input type="text" id={`${prefix}-steam-id`} placeholder="Enter Steam App ID" className="form-input w-full bg-gray-800 border-gray-600 rounded-md py-2 px-3 text-white" defaultValue={fighter.appId || ''} />
-                    <button id={`${prefix}-fetch-steam-btn`} className="bg-blue-600 hover:bg-blue-700 text-white font-bold py-2 px-4 rounded-lg w-32">Fetch</button>
+                    <input type="text" value={steamIdInput} onChange={(e) => setSteamIdInput(e.target.value)} placeholder="Enter Steam App ID" className="form-input w-full bg-gray-800 border-gray-600 rounded-md py-2 px-3 text-white" />
+                    <button onClick={onFetchClick} disabled={isLoading} className="bg-blue-600 hover-bg-blue-700 text-white font-bold py-2 px-4 rounded-lg w-32 disabled:bg-gray-500">
+                        {isLoading ? '...' : 'Fetch'}
+                    </button>
                 </div>
             </div>
             
@@ -87,7 +113,7 @@ const FighterCard = ({ fighter, prefix }) => {
     );
 };
 
-const CenterPanel = ({ fighter1, fighter2 }) => (
+const CenterPanel = ({ fighter1, fighter2, finalScores }) => (
     <div className="bg-gray-800 rounded-2xl shadow-2xl p-6 flex flex-col items-center justify-center space-y-4 order-first lg:order-none">
         <div id="champions-hall" className="bg-gray-900 w-full p-3 rounded-lg text-center relative mt-4">
             <h3 className="text-lg font-bold text-amber-400 underline decoration-wavy">Hall of Champions</h3>
@@ -95,12 +121,16 @@ const CenterPanel = ({ fighter1, fighter2 }) => (
         <div className="flex items-center justify-around w-full">
             <div className="text-center">
                 <p className="text-gray-400 text-sm truncate">{fighter1?.name || 'Fighter 1'}</p>
-                <p id="item1-final-score" className="text-5xl font-bold text-blue-400 transition-colors duration-300">-.--</p>
+                <p id="item1-final-score" className="text-5xl font-bold text-blue-400 transition-colors duration-300">
+                    {finalScores.score1 > 0 ? finalScores.score1.toFixed(2) : '-.--'}
+                </p>
             </div>
             <p className="text-5xl font-black text-gray-600">VS</p>
             <div className="text-center">
                  <p className="text-gray-400 text-sm truncate">{fighter2?.name || 'Fighter 2'}</p>
-                <p id="item2-final-score" className="text-5xl font-bold text-purple-400 transition-colors duration-300">-.--</p>
+                <p id="item2-final-score" className="text-5xl font-bold text-purple-400 transition-colors duration-300">
+                    {finalScores.score2 > 0 ? finalScores.score2.toFixed(2) : '-.--'}
+                </p>
             </div>
         </div>
         <div id="winner-box" className="text-center bg-gray-900 w-full p-4 rounded-lg min-h-[96px] flex flex-col justify-center">
@@ -121,10 +151,10 @@ function App() {
     const [fighter2, setFighter2] = useState(null);
     const [universeFighters, setUniverseFighters] = useState([]);
     const [roster, setRoster] = useState({});
+    const [finalScores, setFinalScores] = useState({ score1: 0, score2: 0 });
 
     // Effect for initializing the app state from localStorage
     useEffect(() => {
-        console.log("Attempting to load data from localStorage...");
         try {
             const savedData = localStorage.getItem('boutTimeUniverseData');
             if (savedData) {
@@ -132,35 +162,78 @@ function App() {
                 if (parsedData.universeFighters && parsedData.roster) {
                     setUniverseFighters(parsedData.universeFighters);
                     setRoster(parsedData.roster);
-                    console.log("Universe loaded from previous session!");
                 }
-            } else {
-                 console.log("No saved data found, initializing new universe.");
             }
         } catch (e) {
             console.error("Failed to load or parse universe from local storage:", e);
         }
-        
-        // Always ensure fighters are initialized
         setFighter1(createNewFighter());
         setFighter2(createNewFighter());
-    }, []); // Empty dependency array means this runs only once on mount
+    }, []);
+
+    // Effect for recalculating scores whenever fighters or roster change
+    useEffect(() => {
+        if (fighter1 && fighter2 && roster) {
+            const rawScore1 = calculateRawScore(fighter1);
+            const finalScore1 = applyBonuses(rawScore1, fighter1, roster);
+
+            const rawScore2 = calculateRawScore(fighter2);
+            const finalScore2 = applyBonuses(rawScore2, fighter2, roster);
+
+            setFinalScores({ score1: finalScore1, score2: finalScore2 });
+        }
+    }, [fighter1, fighter2, roster]);
+    
+    // Handler for fetching fighter data
+    const handleFetch = async (prefix, appId) => {
+        const newFighterData = await fetchSteamData(appId);
+        if (newFighterData) {
+            if (prefix === 'item1') {
+                setFighter1(newFighterData);
+            } else {
+                setFighter2(newFighterData);
+            }
+
+            // Add to universe if it's a new fighter
+            if (!universeFighters.some(f => f.appId === newFighterData.appId)) {
+                const newUniverse = [...universeFighters, newFighterData];
+                setUniverseFighters(newUniverse);
+                // In a real app, we would also save this to localStorage here.
+            }
+        } else {
+            alert(`Failed to fetch data for App ID: ${appId}`);
+        }
+    };
 
     return (
         <div className="bg-gray-900 text-white min-h-screen p-4 sm:p-6 w-full">
             <div className="w-full max-w-7xl mx-auto">
                 <Header />
                 <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-                    <FighterCard fighter={fighter1} prefix="item1" />
-                    <CenterPanel fighter1={fighter1} fighter2={fighter2} />
-                    <FighterCard fighter={fighter2} prefix="item2" />
+                    <FighterCard 
+                        fighter={fighter1} 
+                        prefix="item1" 
+                        handleFetch={handleFetch} 
+                        setFighter={setFighter1}
+                        universeFighters={universeFighters}
+                    />
+                    <CenterPanel 
+                        fighter1={fighter1} 
+                        fighter2={fighter2}
+                        finalScores={finalScores}
+                    />
+                    <FighterCard 
+                        fighter={fighter2} 
+                        prefix="item2" 
+                        handleFetch={handleFetch} 
+                        setFighter={setFighter2}
+                        universeFighters={universeFighters}
+                    />
                 </div>
             </div>
-            {/* Modals will be added here in Phase 4 */}
         </div>
     );
 }
 
 export default App;
-
 
