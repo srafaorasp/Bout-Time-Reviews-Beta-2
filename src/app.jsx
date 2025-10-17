@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { fetchSteamData } from './api.js';
 import { calculateRawScore, applyBonuses } from './fightLogic.js';
+import { UniverseSetupModal, HelpModal } from './Modals.jsx';
 
 // --- Helper function to create a default fighter state ---
 const createNewFighter = () => ({
@@ -17,12 +18,19 @@ const createNewFighter = () => ({
 
 // --- UI Components ---
 
-const Header = () => (
+const Header = ({ onHelpClick }) => (
     <div className="text-center mb-8 relative">
         <div className="flex justify-center items-center gap-4">
              <h1 className="text-4xl font-extrabold text-white tracking-tight">Bout Time Reviews <span className="text-sm font-light text-purple-400">(React Edition)</span></h1>
         </div>
         <p className="text-gray-400 mt-2">Which one will be crowned the winner?</p>
+        <div className="absolute top-0 right-0">
+             <button onClick={onHelpClick} className="p-2 text-gray-400 hover:text-white" title="Quick Start Guide">
+                <svg xmlns="http://www.w3.org/2000/svg" className="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M8.228 9c.549-1.165 2.03-2 3.772-2 2.21 0 4 1.343 4 3 0 1.4-1.278 2.575-3.006 2.907-.542.104-.994.54-.994 1.093m0 3h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
+                </svg>
+            </button>
+        </div>
     </div>
 );
 
@@ -30,7 +38,6 @@ const FighterCard = ({ fighter, prefix, handleFetch, setFighter, universeFighter
     const [steamIdInput, setSteamIdInput] = useState('');
     const [isLoading, setIsLoading] = useState(false);
 
-    // Update the input field if the fighter data changes from above
     useEffect(() => {
         setSteamIdInput(fighter?.appId || '');
     }, [fighter]);
@@ -80,7 +87,7 @@ const FighterCard = ({ fighter, prefix, handleFetch, setFighter, universeFighter
                 <p className="text-center text-xs text-gray-400">- OR -</p>
                 <div className="flex gap-2 items-center">
                     <input type="text" value={steamIdInput} onChange={(e) => setSteamIdInput(e.target.value)} placeholder="Enter Steam App ID" className="form-input w-full bg-gray-800 border-gray-600 rounded-md py-2 px-3 text-white" />
-                    <button onClick={onFetchClick} disabled={isLoading} className="bg-blue-600 hover-bg-blue-700 text-white font-bold py-2 px-4 rounded-lg w-32 disabled:bg-gray-500">
+                    <button onClick={onFetchClick} disabled={isLoading} className="bg-blue-600 hover:bg-blue-700 text-white font-bold py-2 px-4 rounded-lg w-32 disabled:bg-gray-500">
                         {isLoading ? '...' : 'Fetch'}
                     </button>
                 </div>
@@ -152,9 +159,14 @@ function App() {
     const [universeFighters, setUniverseFighters] = useState([]);
     const [roster, setRoster] = useState({});
     const [finalScores, setFinalScores] = useState({ score1: 0, score2: 0 });
+    
+    // State to manage modal visibility
+    const [isHelpModalVisible, setIsHelpModalVisible] = useState(false);
+    const [isUniverseSetupVisible, setIsUniverseSetupVisible] = useState(false);
 
     // Effect for initializing the app state from localStorage
     useEffect(() => {
+        let isLoaded = false;
         try {
             const savedData = localStorage.getItem('boutTimeUniverseData');
             if (savedData) {
@@ -162,11 +174,17 @@ function App() {
                 if (parsedData.universeFighters && parsedData.roster) {
                     setUniverseFighters(parsedData.universeFighters);
                     setRoster(parsedData.roster);
+                    isLoaded = true;
                 }
             }
         } catch (e) {
             console.error("Failed to load or parse universe from local storage:", e);
         }
+        
+        if (!isLoaded) {
+            setIsUniverseSetupVisible(true);
+        }
+        
         setFighter1(createNewFighter());
         setFighter2(createNewFighter());
     }, []);
@@ -194,11 +212,10 @@ function App() {
                 setFighter2(newFighterData);
             }
 
-            // Add to universe if it's a new fighter
             if (!universeFighters.some(f => f.appId === newFighterData.appId)) {
                 const newUniverse = [...universeFighters, newFighterData];
                 setUniverseFighters(newUniverse);
-                // In a real app, we would also save this to localStorage here.
+                // Saving to localStorage should be handled here as well
             }
         } else {
             alert(`Failed to fetch data for App ID: ${appId}`);
@@ -208,7 +225,7 @@ function App() {
     return (
         <div className="bg-gray-900 text-white min-h-screen p-4 sm:p-6 w-full">
             <div className="w-full max-w-7xl mx-auto">
-                <Header />
+                <Header onHelpClick={() => setIsHelpModalVisible(true)} />
                 <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
                     <FighterCard 
                         fighter={fighter1} 
@@ -231,6 +248,9 @@ function App() {
                     />
                 </div>
             </div>
+            {/* Render Modals */}
+            <UniverseSetupModal visible={isUniverseSetupVisible} onClose={() => setIsUniverseSetupVisible(false)} />
+            <HelpModal visible={isHelpModalVisible} onClose={() => setIsHelpModalVisible(false)} />
         </div>
     );
 }
