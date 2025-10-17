@@ -25,7 +25,6 @@ async function fetchWithProxyRotation(apiUrl) {
 }
 
 // Main function to fetch and process all data for a new fighter.
-// It no longer interacts with the DOM; it just returns data.
 export async function fetchSteamData(appId) {
     if (!appId || !/^\d+$/.test(appId)) {
         console.error('Invalid App ID provided.');
@@ -43,7 +42,6 @@ export async function fetchSteamData(appId) {
     if (reviewsData?.success && detailsData?.[appId]?.success) {
         const appDetails = detailsData[appId].data;
         
-        // Create a new fighter object from the fetched data.
         const newFighter = {
             name: appDetails?.name || `Game ${appId}`,
             devHouse: appDetails?.developers?.[0] || '',
@@ -63,3 +61,4 @@ export async function fetchSteamData(appId) {
         return null;
     }
 }
+
